@@ -1,0 +1,73 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Local config overrides (secrets stay in .env)
+config.local.yaml
+/config.yaml
+/mcp.json
+
+# Agent runtime state
+.memory/
+.tasks/
+.worktrees/
+.mailboxes/
+.transcripts/
+.task_outputs/
+.codegraph/
+.sessions/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Brainstorm / local design sessions
+.superpowers/
+
+# Local app data
+/data/
+/runs/
+/migrations/
+/logs/
+/archives/
+data/avent.db
+data/avent.db-*
+data/uploads/
+web/dist/
+web/node_modules/
+server/im_channels/node_modules/
+
+# macOS app build caches
+macos/.build/
+macos/.swiftpm/
+macos/Packaging/.cache/
+
+# Local cleanup archive and disposable tool caches
+/无关紧要（可删除）/
+/cli&web（可删除）/
+/.build/
+.pytest_cache/
+/.tmp/
+/tmp/
+/.understand-anything/
+
+# Local plugin installation and review metadata
+.review-cache/
+.downloaded_at

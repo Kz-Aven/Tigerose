@@ -1,0 +1,15 @@
+openai
+typesafe-sdk
+python-dotenv
+pyyaml
+lark-oapi
+qrcode[pil]
+fastapi
+uvicorn
+sse-starlette
+python-multipart
+httpx
+ddgs
+dingtalk-stream
+openpyxl
+./macos/Packaging/vendor/agent-asset-expert

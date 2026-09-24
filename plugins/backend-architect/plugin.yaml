@@ -1,0 +1,13 @@
+name: backend-architect
+version: "1.0.0"
+enabled: true
+description: "Deep expertise in distributed systems and high-concurrency architecture, excelling at transforming complex business into elegant technical solutions"
+
+# 技能目录：自动扫描其中的 SKILL.md
+skills:
+  - ./skills/frontend-dev
+  - ./skills/fullstack-dev
+
+# Agent 定义片段：追加到 AGENTS prompt 中
+agents:
+  fragment: ./agents/backend-architect.md

@@ -1,0 +1,2 @@
+# Placeholder so SwiftPM has a Resources folder.
+# Real runtime is injected by macos/Packaging/bundle_runtime.sh into the .app bundle.

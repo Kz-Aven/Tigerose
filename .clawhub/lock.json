@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "@briancolinger/pr-reviewer": {
+      "version": "1.0.1",
+      "installedAt": 1783435334586,
+      "ownerHandle": "briancolinger"
+    }
+  }
+}

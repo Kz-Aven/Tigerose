@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1096" viewBox="0 0 1200 1096" role="img" aria-labelledby="title desc">
+<title id="title">Tigerose — 本地优先的多 Agent 协作产品架构</title>
+<desc id="desc">人通过 macOS 原生应用中的助理和项目群派发任务；Agent Mesh 支持多角色发现、委派、沟通、交付与验收；Agent Harness 管理工具执行、权限、上下文、目标及预算；模型、Skills、MCP、Plugins、频道提供能力，本地存储保存会话与产物。外部服务按需联网。</desc>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#adaca8" stroke-width="1.6"/></marker>
+  <style>
+    text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+    .title{font-size:34px;font-weight:700;fill:#191918;letter-spacing:-1px}
+    .label{font-size:13px;font-weight:700;letter-spacing:2px;fill:#a3434b}
+    .h{font-size:21px;font-weight:650;fill:#242422}
+    .body{font-size:16px;fill:#5c5c57}
+    .small{font-size:14px;fill:#73736c}
+    .card{fill:#fff;stroke:#dfdfd7;stroke-width:1}
+    .line{fill:none;stroke:#adaca8;stroke-width:1.6;marker-end:url(#arrow)}
+  </style>
+</defs>
+<rect width="1200" height="1096" rx="24" fill="#f5f4f0"/>
+<rect x="40" y="38" width="7" height="64" rx="3" fill="#ce3448"/>
+<text x="64" y="65" class="title">Tigerose</text>
+<text x="65" y="95" class="body">心有猛虎，细嗅蔷薇。</text>
+<text x="1160" y="64" text-anchor="end" class="label">LOCAL-FIRST · MULTI-AGENT</text>
+<text x="1160" y="91" text-anchor="end" class="small">人掌握目标，Agent 分工协作，Harness 约束执行</text>
+
+<rect x="40" y="132" width="1120" height="133" rx="16" class="card"/>
+<text x="64" y="165" class="label">01 / 人与工作入口</text>
+<text x="64" y="202" class="h">macOS 原生应用</text>
+<text x="64" y="234" class="body">提出目标 · 配置能力 · 确认关键决定</text>
+<line x1="413" y1="159" x2="413" y2="240" stroke="#e7e7e0"/>
+<text x="448" y="193" class="h">助理对话</text>
+<text x="448" y="224" class="body">单独沟通 · 角色与模型配置</text>
+<line x1="782" y1="159" x2="782" y2="240" stroke="#e7e7e0"/>
+<text x="817" y="193" class="h">项目群</text>
+<text x="817" y="224" class="body">@ 人工派活 · 工作区 · 群内反馈</text>
+<path d="M600 266 V300" class="line"/>
+
+<rect x="40" y="311" width="1120" height="209" rx="16" class="card"/>
+<text x="64" y="345" class="label">02 / AGENT MESH · A2A 协作</text>
+<text x="1134" y="345" class="small" text-anchor="end">按角色独立配置模型、工具与协作权限</text>
+<g>
+<rect x="64" y="366" width="246" height="74" rx="10" fill="#f9f8f5" stroke="#e5e3dc"/>
+<text x="187" y="395" text-anchor="middle" class="h">研究助理</text><text x="187" y="423" text-anchor="middle" class="small">搜集资料 · 组织来源</text>
+<rect x="339" y="366" width="246" height="74" rx="10" fill="#f9f8f5" stroke="#e5e3dc"/>
+<text x="462" y="395" text-anchor="middle" class="h">分析助理</text><text x="462" y="423" text-anchor="middle" class="small">比较方案 · 解释差异</text>
+<rect x="614" y="366" width="246" height="74" rx="10" fill="#f9f8f5" stroke="#e5e3dc"/>
+<text x="737" y="395" text-anchor="middle" class="h">写作助理</text><text x="737" y="423" text-anchor="middle" class="small">组织表达 · 交付初稿</text>
+<rect x="889" y="366" width="246" height="74" rx="10" fill="#f9f8f5" stroke="#e5e3dc"/>
+<text x="1012" y="395" text-anchor="middle" class="h">复核助理</text><text x="1012" y="423" text-anchor="middle" class="small">检查证据 · 提出修改</text>
+<path d="M315 403 H334" stroke="#adaca8" fill="none" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<path d="M590 403 H609" stroke="#adaca8" fill="none" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<path d="M865 403 H884" stroke="#adaca8" fill="none" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+</g>
+<rect x="64" y="458" width="1072" height="39" rx="8" fill="#fbecef"/>
+<text x="600" y="483" text-anchor="middle" font-size="16" fill="#9a3544">发现同伴　→　委派任务　→　沟通澄清　→　传递产物　→　验收 / 返工</text>
+<path d="M600 521 V555" class="line"/>
+
+<rect x="40" y="566" width="1120" height="182" rx="16" fill="#252625"/>
+<text x="64" y="600" font-size="13" font-weight="700" letter-spacing="2" fill="#ee98a4">03 / AGENT HARNESS · 执行与验收</text>
+<text x="1134" y="600" text-anchor="end" font-size="14" fill="#b6b8af">本机 Python Runtime · FastAPI</text>
+<line x1="64" y1="619" x2="1136" y2="619" stroke="#4b4c47"/>
+<text x="66" y="655" font-size="19" font-weight="650" fill="#fafaf5">目标与结束条件</text>
+<text x="66" y="687" font-size="15" fill="#bebfb6">Goal · Stop Gate · 验收依据</text>
+<text x="343" y="655" font-size="19" font-weight="650" fill="#fafaf5">工具与权限</text>
+<text x="343" y="687" font-size="15" fill="#bebfb6">结构化结果 · 范围与授权</text>
+<text x="614" y="655" font-size="19" font-weight="650" fill="#fafaf5">上下文与记忆</text>
+<text x="614" y="687" font-size="15" fill="#bebfb6">会话隔离 · 历史 · 摘要</text>
+<text x="887" y="655" font-size="19" font-weight="650" fill="#fafaf5">运行控制</text>
+<text x="887" y="687" font-size="15" fill="#bebfb6">预算 · 循环保护 · Hooks</text>
+<text x="64" y="725" font-size="14" fill="#a3a69d">人的确认与反馈贯穿执行过程；工具调用成功不等于任务已经完成。</text>
+<path d="M320 749 V784" class="line"/>
+<path d="M880 749 V784" class="line"/>
+
+<rect x="40" y="795" width="545" height="208" rx="16" class="card"/>
+<text x="64" y="829" class="label">04 / 按需扩展能力</text>
+<text x="64" y="869" class="h">Models · Skills · MCP · Plugins</text>
+<text x="64" y="902" class="body">兼容云模型 / 本地模型服务 · 角色化工具组合</text>
+<line x1="64" y1="923" x2="560" y2="923" stroke="#e7e7e0"/>
+<text x="64" y="955" class="body">Channels：飞书 · 钉钉 · 企业微信</text>
+<text x="64" y="981" class="small">外部服务按需联网，连接器需要相应安装与授权</text>
+
+<rect x="609" y="795" width="551" height="208" rx="16" class="card"/>
+<text x="633" y="829" class="label">05 / 本地数据与工作产物</text>
+<text x="633" y="869" class="h">Local Storage · Workspace</text>
+<text x="633" y="902" class="body">会话 · 记忆 · 配置 · 运行记录</text>
+<line x1="633" y1="923" x2="1136" y2="923" stroke="#e7e7e0"/>
+<text x="633" y="955" class="body">本机数据库与文件 · 项目工作区与交付物</text>
+<text x="633" y="981" class="small">使用云模型和外部服务时会发送必要的任务数据</text>
+
+<text x="40" y="1055" class="small">角色为组合示例 · A2A 指应用内 Agent-to-Agent 协作 · SVG 架构图</text>
+<text x="1160" y="1055" text-anchor="end" class="label">TIGEROSE</text>
+</svg>

@@ -1,0 +1,15 @@
+name: fbsir-industry-scene-researcher
+version: "2.3.0"
+enabled: true
+mode: on-demand
+description: >
+  行业场景研究员 — 把模糊行业目标收敛成 WorkBuddy 可执行的场景补位卡、
+  作战路径、人机混编任务表、3 天试点行动包和唯一下一步。
+  默认走无连接器首值主线，连接器仅作可选增强。
+
+skills:
+  - skills/industry-scene-service-recording
+
+agents:
+  files:
+    - agents/fbsir-industry-scene-researcher.md

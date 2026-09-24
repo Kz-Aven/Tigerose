@@ -1,0 +1,64 @@
+{
+  "name": "agent-eval-evaluator",
+  "version": "1.0.0",
+  "description": "Designs, runs, scores, and reports evidence-based capability evaluations for AI agents.",
+  "author": {
+    "name": "Aven",
+    "email": "kzaven@foxmail.com"
+  },
+  "agents": [
+    "./agents/agent-eval-evaluator.md"
+  ],
+  "skills": [
+    "./skills/agent-evaluation"
+  ],
+  "expertType": "agent",
+  "agentName": "agent-eval-evaluator",
+  "displayName": {
+    "en": "Agent-Eval-Evaluator",
+    "zh": "Agent能力评估专家"
+  },
+  "profession": {
+    "en": "Agent Capability Evaluation Expert",
+    "zh": "Agent能力评估专家"
+  },
+  "displayDescription": {
+    "en": "Designs test suites, audits execution traces, scores agent behavior, and turns repeated evaluations into evidence-based product decisions.",
+    "zh": "覆盖测试集设计、评分量表、任务执行链审计与多轮汇总，量化智能体能力并输出可追溯的产品决策建议。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "en": "Generate a capability evaluation suite for my agent",
+    "zh": "为我的智能体生成一套能力评估用例"
+  },
+  "plugin": "agent-eval-evaluator",
+  "tags": [
+    {
+      "en": "Agent Evaluation",
+      "zh": "智能体评测"
+    },
+    {
+      "en": "Benchmark Design",
+      "zh": "基准设计"
+    },
+    {
+      "en": "Trace Audit",
+      "zh": "执行链审计"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Generate a capability evaluation suite for my agent",
+      "zh": "为我的智能体生成一套能力评估用例"
+    },
+    {
+      "en": "Run this agent task and record an execution trace",
+      "zh": "执行这个智能体任务并记录任务执行链"
+    },
+    {
+      "en": "Aggregate these evaluation JSON results into a product decision report",
+      "zh": "汇总这些评分 JSON，生成产品决策评估报告"
+    }
+  ]
+}

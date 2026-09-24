@@ -1,0 +1,17 @@
+name: data-analytics-reporter
+version: "1.1.0"
+enabled: true
+mode: on-demand
+description: >
+  Expert data analyst (数妙妙) — metric diagnostics, KPI design, data quality,
+  visualization, and decision-ready reporting. From Clawhub / CodeBuddy.
+
+skills:
+  - skills
+
+tools:
+  module: tools_example.py
+
+agents:
+  files:
+    - agents/data-analytics-reporter.md

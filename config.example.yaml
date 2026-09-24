@@ -1,0 +1,135 @@
+# Tigerose（Avent Agent 兼容）配置模板 — 复制为 config.yaml 后按需修改
+# cp config.example.yaml config.yaml
+
+_config_version: 1  # 配置结构版本号，升级字段时递增
+
+# ═══════════════════════════════════════════════════════════
+#  大模型 / API 连接
+# ═══════════════════════════════════════════════════════════
+model:
+  default: qwen/qwen3.6-27b        # 主模型 ID；env: MODEL_ID / TIGEROSE_MODEL / AVENT_MODEL
+  provider: custom                 # 提供商标识（日志用）
+  base_url: http://localhost:1234/v1  # LM Studio OpenAI 兼容 API；env: TIGEROSE_BASE_URL / AVENT_BASE_URL
+  api_key: lm-studio               # 本地占位 Key；云端 Key 建议放 .env
+  context_length: 65536            # 上下文窗口（字符估算，预留）
+  max_tokens: 8000                 # 单次 completion 默认 max_tokens
+  fallback_model: null             # 备用模型；429/529 连续失败时切换；env: FALLBACK_MODEL_ID
+  temperature: 0.7                 # 采样温度（预留，当前未传给 API）
+  profiles:                        # /model 可切换的模型列表（id 即 /model 参数）
+    - id: qwen/qwen3.6-27b
+      label: Qwen 3.6 27B
+      provider: custom
+      base_url: http://localhost:1234/v1
+      api_key: lm-studio
+      reasoning_effort: none
+    - id: qwythos-9b-v2
+      label: Qwythos 9B v2
+      provider: custom
+      base_url: http://localhost:1234/v1
+      api_key: lm-studio
+      reasoning_effort: none
+    - id: google/gemma-4-12b-qat
+      label: Gemma 4 12B QAT
+      provider: custom
+      base_url: http://localhost:1234/v1
+      api_key: lm-studio
+      reasoning_effort: none
+    - id: deepseek-v4-flash
+      label: DeepSeek V4 Flash
+      provider: deepseek
+      base_url: https://api.deepseek.com
+      api_key: ""
+      reasoning_effort: none
+
+# ═══════════════════════════════════════════════════════════
+#  主 Agent 行为
+# ═══════════════════════════════════════════════════════════
+agent:
+  max_turns: 150                   # App/server tool loop 最大 LLM 轮数
+  goal_evaluator_model: ""         # Goal 评估模型 profile ID；空 = 跟随当前 run 的主模型
+  reasoning_effort: none           # LM Studio/DeepSeek/OpenAI 默认不传该字段
+  api_max_retries: 3               # LLM API 失败最大重试次数
+  verbose: false                   # 额外调试日志（预留）
+  trusted_data_roots: []           # 所有助理免授权访问的绝对目录（如 Tigerose 数据根）
+  feature_flags:
+    typesafe_judgments_v1: true    # TypeSafe 优先用于意图分类与 Goal 评估；技术失败才回退 LLM
+  typesafe:
+    intent_timeout_s: 5.0
+    goal_timeout_s: 20.0
+    intent_goal_activation_min_confidence: 0.70
+    intent_durable_signal_min_probability: 0.70
+    goal_completion_min_confidence: 0.70
+
+# ═══════════════════════════════════════════════════════════
+#  联网（web_search / web_extract）— 本期固定双轨
+# ═══════════════════════════════════════════════════════════
+web:
+  search_backend: ddgs             # DuckDuckGo（需 pip install ddgs）
+  extract_backend: tavily          # 读页；Key 放 TIGEROSE_HOME/.env（兼容 AVENT_HOME） 的 TAVILY_API_KEY
+
+# ═══════════════════════════════════════════════════════════
+#  终端 / bash 执行
+# ═══════════════════════════════════════════════════════════
+terminal:
+  backend: local                   # 执行后端（当前仅 local）
+  cwd: .                           # bash 默认工作目录（相对项目根）
+  timeout: 180                     # bash 命令超时（秒）
+
+# ═══════════════════════════════════════════════════════════
+#  子 Agent 委派（task 工具 / spawn_subagent）
+# ═══════════════════════════════════════════════════════════
+delegation:
+  model: ""                        # 子 agent 模型；空 = 继承 model.default
+  provider: ""                     # 子 agent provider；空 = 继承
+  base_url: ""                     # 子 agent API 地址；空 = 继承 model.base_url
+  api_key: ""                      # 子 agent API Key；空 = 继承 model.api_key
+  max_iterations: 50               # 子 agent 最大 LLM 轮数
+  reasoning_effort: ""             # 子 agent 推理强度；空 = 继承 agent.reasoning_effort
+  tools:
+    - bash                         # 执行 shell 命令
+    - read_file                    # 读文件
+    - write_file                   # 写文件
+    - edit_file                    # 精确替换编辑
+    - glob                         # 按 glob 搜文件
+
+# ═══════════════════════════════════════════════════════════
+#  Session 隔离（CLI / 飞书 / Cron 各自独立对话）
+# ═══════════════════════════════════════════════════════════
+session:
+  persist_dir: .sessions           # 会话持久化目录
+  cli_default_scope: cli:default   # CLI 默认 scope；/new 归档旧 session 并绑定新 session
+  feishu_one_session_per_chat: true  # 飞书按 chat_id 隔离（feishu:chat:{id}）
+  save_every_turn: true            # 每轮 agent 结束后立即落盘
+  reset:
+    mode: idle                     # CLI 空闲自动 /new：idle | daily | off
+    idle_minutes: 1440             # idle 模式无活动分钟数（1440 = 24h）
+    at_hour: 4                     # daily 模式触发小时（预留）
+  memory:
+    auto_extract_scope: session    # 自动 extract_memories 默认 scope
+    promote_on_session_end: false  # session 归档时 promote 到 project（预留）
+    max_session_items: 10          # 单 session 最多 session memory 条数（预留）
+
+# ═══════════════════════════════════════════════════════════
+#  Tigerose / Avent 扩展（Hermes 无同名段；键名 avent 保持兼容）
+# ═══════════════════════════════════════════════════════════
+avent:
+  llm:
+    max_tokens_escalated: 16000    # 输出截断时 escalation max_tokens
+    max_consecutive_529: 2         # 连续 529 多少次后切 fallback_model
+    max_recovery_retries: 2        # 输出截断后续写注入最大次数
+    base_delay_ms: 500             # API 重试基础退避（毫秒）
+    continuation_prompt: "Continue from the previous response. Do not repeat completed work."  # 截断续写提示语
+  bash:
+    max_output_chars: 50000        # bash 输出截断上限（字符）
+    background_keywords:           # 命令含这些子串时自动后台执行
+      - install                    # pip install、npm install 等
+      - build                      # cargo build、docker build 等
+      - test                       # pytest、npm test 等
+      - deploy
+      - compile
+      - docker build
+      - pip install
+      - npm install
+      - cargo build
+      - pytest
+      - make
