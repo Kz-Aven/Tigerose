@@ -149,6 +149,43 @@ class AttemptLedgerTests(unittest.TestCase):
 
         self.assertEqual(self.ledger.blocking_attempts(obj.objective_id), [])
 
+    def test_legacy_background_bash_query_failure_never_blocks(self) -> None:
+        obj = self._objective()
+        query = self.ledger.create_attempt(
+            objective_id=obj.objective_id,
+            tool_name="bash_wait",
+            effect="write",
+            goal_role="supporting_mutation",
+        )
+        self.ledger.mark_failed(query.attempt_id)
+
+        self.assertEqual(self.ledger.blocking_attempts(obj.objective_id), [])
+
+    def test_supporting_write_retry_with_same_payload_supersedes_failure(self) -> None:
+        obj = self._objective()
+        digest = payload_digest({"range": "A12:R12", "cells": "row data"})
+        failed = self.ledger.create_attempt(
+            objective_id=obj.objective_id,
+            tool_name="bash",
+            effect="write",
+            goal_role="supporting_mutation",
+            attempted_payload_digest=digest,
+            objective_revision=obj.revision,
+        )
+        self.ledger.mark_failed(failed.attempt_id)
+        succeeded = self.ledger.create_attempt(
+            objective_id=obj.objective_id,
+            tool_name="bash",
+            effect="write",
+            goal_role="supporting_mutation",
+            attempted_payload_digest=digest,
+            objective_revision=obj.revision,
+        )
+        self.ledger.mark_succeeded(succeeded.attempt_id)
+
+        self.ledger.supersede(failed.attempt_id, succeeded.attempt_id)
+        self.assertEqual(self.ledger.blocking_attempts(obj.objective_id), [])
+
     def test_in_doubt_is_scoped_to_its_own_objective(self) -> None:
         first = self._objective(target_id="calendar_a")
         second = self._objective(target_id="calendar_b")

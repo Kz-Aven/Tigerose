@@ -121,6 +121,51 @@ class GoalSessionAuditTests(unittest.TestCase):
         self.assertEqual(controller.on_candidate_stop("done")["action"], "suspended")
         self.assertEqual(controller.goal["evaluation_blocks"], 8)
 
+    def test_unbound_goal_does_not_inherit_session_ledger_failures(self):
+        from server.runtime.attempt_ledger import AttemptLedger
+
+        sm, state = self.make_state()
+        controller = GoalController(
+            state=state,
+            session_manager=sm,
+            board_scope="assistant:test",
+            run_id="run_unbound",
+            user_request="write current requirement",
+        )
+        controller.activate("write current requirement", source="auto_tool")
+        ledger = AttemptLedger()
+        old = ledger.create_attempt(
+            objective_id="objective_previous_request",
+            tool_name="bash",
+            effect="write",
+            goal_role="supporting_mutation",
+        )
+        ledger.mark_failed(old.attempt_id)
+        state.context["execution_ledger"] = ledger.to_context()
+
+        self.assertNotIn("objective_id", controller.goal)
+        self.assertEqual(controller.unresolved_tool_failures(), [])
+
+    def test_auto_activated_goal_binds_current_objective(self):
+        sm, state = self.make_state()
+        controller = GoalController(
+            state=state,
+            session_manager=sm,
+            board_scope="assistant:test",
+            run_id="run_auto_objective",
+            user_request="write current requirement",
+        )
+
+        controller.before_tool(
+            "bash",
+            {"command": "dws sheets +cells-set"},
+            "call_auto",
+            objective_id="objective_current",
+        )
+
+        self.assertEqual(controller.goal["source"], "auto_tool")
+        self.assertEqual(controller.goal["objective_id"], "objective_current")
+
     def test_evaluator_failure_suspends_not_allow(self):
         sm, state = self.make_state()
 

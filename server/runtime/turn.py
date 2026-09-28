@@ -798,7 +798,36 @@ def _run_chat_turn_inner(
                     "thinking": None,
                     "termination": "normal_stop",
                 }
-            user_message = str(resumed.get("condition") or user_message)
+            # A resume is evidence reconciliation, not a request to execute the
+            # persisted Goal condition again.  In particular, a condition can
+            # describe a product request that was previously completed through
+            # an external system, so treating it as new user input can create
+            # unrelated writes.
+            decision = goal_controller.on_candidate_stop(
+                "恢复后仅复核已有 Goal 证据；未执行新的工具调用或写操作。"
+            )
+            if decision.get("action") == "allow":
+                reply = "Goal 已恢复并确认完成；未执行新的工具调用。"
+            else:
+                reply = (
+                    "Goal 已恢复并完成既有证据复核；未执行新的工具调用。\n"
+                    + str(decision.get("message") or "现有证据尚不足以确认完成。")
+                )
+            return {
+                "reply": reply,
+                "remember_proposal": None,
+                "session_id": sid,
+                "scope_key": scope_key,
+                "model_profile_id": profile["id"],
+                "model_label": profile.get("label") or profile["id"],
+                "capabilities_used": {},
+                "tool_rounds": 0,
+                "thinking": None,
+                "termination": "goal_reconciled",
+                "run_outcome_status": "completed"
+                if decision.get("action") == "allow"
+                else "blocked_runtime",
+            }
     from server.runtime.feature_flags import (
         flag_enabled,
         validate_feature_flags_at_run_start,

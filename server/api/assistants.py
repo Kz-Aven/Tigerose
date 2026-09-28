@@ -338,11 +338,15 @@ def post_message(template_id: str, body: MessageCreate):
         )
         sess.sync_after_message(template_id, sid)
         return {**msg, "runs": []}
+    if command and command.action == "resume":
+        state = sess.get_sessions().load(sid)
+        if state is None or (state.context.get("goal") or {}).get("status") != "suspended":
+            raise HTTPException(409, "no suspended goal to resume")
     try:
         run_id = coordinator.enqueue(sid, agent_id=template_id)
     except RunBusyError as exc:
         raise HTTPException(409, str(exc)) from exc
-    if command and command.action in {"set", "resume"}:
+    if command and command.action == "set":
         sm = sess.get_sessions()
         state = sm.load(sid)
         if state is None:
@@ -354,15 +358,8 @@ def post_message(template_id: str, body: MessageCreate):
             run_id=run_id,
             user_request=command.condition,
         )
-        if command.action == "set":
-            controller.activate(command.condition, source="explicit")
-            content = command.condition
-        else:
-            resumed = controller.resume()
-            if not resumed:
-                coordinator.cancel(run_id)
-                raise HTTPException(409, "no suspended goal to resume")
-            content = str(resumed.get("condition") or "")
+        controller.activate(command.condition, source="explicit")
+        content = command.condition
     meta = {"attachments": atts} if atts else {}
     if command:
         meta["goal_command"] = command.action

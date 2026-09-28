@@ -208,10 +208,16 @@ class AttemptLedger:
             raise ValueError("supersede requires same objective_id and revision")
         if old.resolved_target_id != new.resolved_target_id:
             raise ValueError("supersede requires same resolved_target_id")
+        if old.attempted_payload_digest != new.attempted_payload_digest:
+            raise ValueError("supersede requires matching attempted payload digest")
 
         objective = self.objectives.get(old.objective_id) or {}
         expected_digest = str(objective.get("expected_payload_digest") or "")
-        if expected_digest and new.attempted_payload_digest != expected_digest:
+        if (
+            old.goal_role == "terminal_action"
+            and expected_digest
+            and new.attempted_payload_digest != expected_digest
+        ):
             raise ValueError("supersede requires matching payload digest")
 
         if old.status not in _BLOCKING_STATUSES:
@@ -224,11 +230,15 @@ class AttemptLedger:
     def blocking_attempts(self, objective_id: str | None = None) -> list[AttemptState]:
         """Return open failed/in_doubt supporting_mutation/terminal attempts."""
         results: list[AttemptState] = []
+        from server.runtime.tools.registry import QUERY_TOOLS
+
         for raw in self.attempts.values():
             attempt = AttemptState.from_dict(raw)
             if objective_id and attempt.objective_id != objective_id:
                 continue
-            if attempt.goal_role in {"query", "control"}:
+            # Defend against legacy records written before query semantics were
+            # attached to background-bash status tools.
+            if attempt.goal_role in {"query", "control"} or attempt.tool_name in QUERY_TOOLS:
                 continue
             if attempt.goal_role not in _BLOCKING_GOAL_ROLES:
                 continue

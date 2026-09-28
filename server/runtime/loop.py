@@ -847,7 +847,14 @@ def _run_tool_loop_inner(
             emit(make_trace_step("tool_call", name, preview_text(args)))
             absorb_goal = absorb_into_goal and task_intent != "independent"
             if goal_controller is not None and absorb_goal:
-                goal_controller.before_tool(name, args, tc.id)
+                goal_controller.before_tool(
+                    name,
+                    args,
+                    tc.id,
+                    objective_id=str(
+                        getattr(run_objective, "objective_id", "") or ""
+                    ),
+                )
 
             from server.runtime import permissions as perm
             from server.runtime.tools import files as file_tools

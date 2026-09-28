@@ -440,7 +440,14 @@ class GoalController:
             f"生命周期: {recent_events or '尚无'}"
         )
 
-    def before_tool(self, name: str, args: dict[str, Any], tool_call_id: str) -> None:
+    def before_tool(
+        self,
+        name: str,
+        args: dict[str, Any],
+        tool_call_id: str,
+        *,
+        objective_id: str = "",
+    ) -> None:
         raw = json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)
         self._call_fingerprints[tool_call_id] = hashlib.sha256(
             f"{name}\0{raw}".encode("utf-8")
@@ -458,8 +465,11 @@ class GoalController:
             self.activate(self.user_request, source="auto_tool")
         goal = self.goal
         if goal and self.active:
+            if objective_id:
+                goal["objective_id"] = objective_id
             goal["run_id"] = self.run_id
             goal["updated_at"] = time.time()
+            self._save()
 
     def after_tool(self, result: Any) -> None:
         if not self.active:
@@ -691,12 +701,15 @@ class GoalController:
             ):
                 ledger = AttemptLedger.from_context(self.state.context)
                 objective_id = str((self.goal or {}).get("objective_id") or "")
-                blocking = ledger.blocking_attempts(objective_id or None)
-                if blocking:
-                    return [
-                        f"{a.tool_name} [{a.status}]"
-                        for a in blocking
-                    ]
+                # Legacy Goals created before an objective existed must not inherit
+                # failed attempts from other requests in the same session.
+                if objective_id:
+                    blocking = ledger.blocking_attempts(objective_id)
+                    if blocking:
+                        return [
+                            f"{a.tool_name} [{a.status}]"
+                            for a in blocking
+                        ]
         except Exception:
             pass
 

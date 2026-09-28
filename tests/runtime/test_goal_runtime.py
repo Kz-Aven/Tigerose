@@ -25,6 +25,7 @@ from server.runtime.run_coordinator import (
 )
 from server.runtime.tools.delegate import run_subagent
 from server.api import assistant_session_ops
+from server.api import assistants as assistants_api
 
 
 class GoalRuntimeTests(unittest.TestCase):
@@ -62,6 +63,75 @@ class GoalRuntimeTests(unittest.TestCase):
         self.assertTrue(
             (sm.root / state.meta.session_id / "state.json").is_file()
         )
+
+    @patch("server.runtime.goal.board.list_tasks", return_value=[])
+    def test_resume_reconciles_existing_evidence_without_new_tools(self, _list_tasks):
+        sm, state = self.make_state()
+        evaluator_calls = []
+
+        def evaluator(payload):
+            evaluator_calls.append(payload)
+            return Evaluation(True, "persisted evidence is sufficient", [], "", "eval")
+
+        controller = GoalController(
+            state=state,
+            session_manager=sm,
+            board_scope="assistant:test",
+            run_id="run_old",
+            user_request="original request",
+            evaluator=evaluator,
+        )
+        controller.activate("original request", source="explicit")
+        controller.goal["status"] = "suspended"
+        controller._save()
+
+        controller.run_id = "run_resume"
+        self.assertIsNotNone(controller.resume())
+        decision = controller.on_candidate_stop("resume only reconciled existing evidence")
+
+        self.assertEqual(decision["action"], "allow")
+        self.assertEqual(controller.goal["status"], "achieved")
+        self.assertEqual(len(evaluator_calls), 1)
+        self.assertEqual(controller.goal.get("attempts") or [], [])
+
+    @patch("server.runtime.goal.board.list_tasks", return_value=[])
+    def test_resume_blocks_on_existing_evidence_without_new_tools(self, _list_tasks):
+        sm, state = self.make_state()
+        controller = GoalController(
+            state=state,
+            session_manager=sm,
+            board_scope="assistant:test",
+            run_id="run_old",
+            user_request="original request",
+            evaluator=lambda payload: Evaluation(False, "missing receipt", ["receipt"], "provide receipt"),
+        )
+        controller.activate("original request", source="explicit")
+        controller.goal["status"] = "suspended"
+        controller._save()
+
+        controller.run_id = "run_resume"
+        self.assertIsNotNone(controller.resume())
+        decision = controller.on_candidate_stop("resume only reconciled existing evidence")
+
+        self.assertEqual(decision["action"], "block")
+        self.assertEqual(controller.goal["status"], "active")
+        self.assertEqual(controller.goal.get("attempts") or [], [])
+
+    def test_assistant_api_forwards_goal_resume_without_pre_mutating_goal(self):
+        state = SimpleNamespace(context={"goal": {"status": "suspended"}})
+        sessions = SimpleNamespace(load=lambda session_id: state)
+        body = assistants_api.MessageCreate(content="/goal resume", session_id="sess_1")
+        with patch("server.api.assistants.repos.get_template", return_value={"template_id": "a"}), \
+             patch("server.api.assistants.repos.add_assistant_message", return_value={"message_id": "m_1"}), \
+             patch("server.api.assistant_session_ops.migrate_assistant_sessions"), \
+             patch("server.api.assistant_session_ops.resolve_session_for_post", return_value="sess_1"), \
+             patch("server.api.assistant_session_ops.get_sessions", return_value=sessions), \
+             patch("server.api.assistant_session_ops.sync_after_message"), \
+             patch("server.runtime.run_coordinator.coordinator.enqueue", return_value="run_1"), \
+             patch("server.api.assistants.scheduler.run_assistant_turn_async") as run_turn:
+            assistants_api.post_message("a", body)
+
+        self.assertEqual(run_turn.call_args.args[1], "/goal resume")
 
     def test_pending_todo_blocks_then_evaluator_achieves(self):
         sm, state = self.make_state()

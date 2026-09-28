@@ -284,12 +284,9 @@ async def post_message(group_id: str, body: GroupMessage):
                 409,
                 "no suspended goal for: " + ", ".join(f"@{name}" for name in missing),
             )
-    if command and command.action in {"set", "resume"}:
+    if command and command.action == "set":
         for _, controller in controllers:
-            if command.action == "set":
-                controller.activate(command.condition, source="explicit")
-            else:
-                controller.resume()
+            controller.activate(command.condition, source="explicit")
 
     event = repos.add_feed_event(
         group_id,
@@ -309,7 +306,7 @@ async def post_message(group_id: str, body: GroupMessage):
     if command and command.action == "set":
         dispatch_content = command.condition
     elif command and command.action == "resume":
-        dispatch_content = "Continue the active Goal from its persisted condition and evidence."
+        dispatch_content = content
     scheduler.enqueue_group_mentions(
         group_id,
         dispatch_content,
