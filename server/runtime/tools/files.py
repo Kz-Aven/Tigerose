@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import os
 import re
 import signal
@@ -15,6 +16,9 @@ _allow_external = contextvars.ContextVar("avent_allow_external", default=False)
 _allow_dangerous_bash = contextvars.ContextVar("avent_allow_dangerous_bash", default=False)
 # When False, dangerous bash patterns are not blocked in run_bash (rule disabled).
 _monitor_dangerous_bash = contextvars.ContextVar("avent_monitor_dangerous_bash", default=True)
+# An execution permit is issued by the unified Bash evaluator for one frozen
+# command.  It is consumed by the final foreground/background runner.
+_bash_execution_permit = contextvars.ContextVar("avent_bash_execution_permit", default=None)
 
 # Ask user (or hard-block if denied). Catastrophic / elevated patterns.
 _BASH_DANGEROUS = re.compile(
@@ -55,6 +59,29 @@ def set_monitor_dangerous_bash(enabled: bool = True):
 
 def reset_monitor_dangerous_bash(token) -> None:
     _monitor_dangerous_bash.reset(token)
+
+
+def allow_bash_execution(command: str, cwd: Path):
+    permit = {
+        "command_digest": hashlib.sha256(command.encode("utf-8")).hexdigest(),
+        "cwd": str(Path(cwd).resolve()),
+        "consumed": False,
+    }
+    return _bash_execution_permit.set(permit)
+
+
+def reset_bash_execution(token) -> None:
+    _bash_execution_permit.reset(token)
+
+
+def consume_bash_execution(command: str, cwd: Path) -> None:
+    permit = _bash_execution_permit.get()
+    if not isinstance(permit, dict):
+        raise PermissionError("bash blocked: missing unified execution permit")
+    digest = hashlib.sha256(command.encode("utf-8")).hexdigest()
+    if permit.get("consumed") or permit.get("command_digest") != digest or permit.get("cwd") != str(Path(cwd).resolve()):
+        raise PermissionError("bash blocked: invalid, expired, or replayed execution permit")
+    permit["consumed"] = True
 
 
 def resolve_path(cwd: Path, path: str) -> Path:
@@ -254,15 +281,10 @@ def run_bash(cwd: Path, command: str) -> str:
     from avent_config import cfg_get, get_config
     from server.runtime.executor import ToolResult
 
-    if (
-        bash_needs_permission(command)
-        and _monitor_dangerous_bash.get()
-        and not _allow_dangerous_bash.get()
-    ):
-        return ToolResult(
-            "bash blocked: dangerous command pattern (denied by policy or awaiting permission)",
-            "denied",
-        )
+    try:
+        consume_bash_execution(command, cwd)
+    except PermissionError as exc:
+        return ToolResult(str(exc), "denied")
     try:
         timeout_s = float(cfg_get(get_config(), "terminal", "timeout", default=180))
     except (TypeError, ValueError):
@@ -300,11 +322,17 @@ def run_bash(cwd: Path, command: str) -> str:
     )
 
 
-def run_verified_readonly_commands(cwd: Path, argv_groups: tuple[tuple[str, ...], ...]):
+def run_verified_readonly_commands(cwd: Path, argv_groups: tuple[tuple[str, ...], ...], *, command: str = ""):
     """Run a parser-verified read-only command plan without a shell."""
     from avent_config import cfg_get, get_config
     from server.runtime.executor import ToolResult
 
+    if not command:
+        return ToolResult("bash blocked: verified execution requires the frozen command", "denied")
+    try:
+        consume_bash_execution(command, cwd)
+    except PermissionError as exc:
+        return ToolResult(str(exc), "denied")
     try:
         timeout_s = float(cfg_get(get_config(), "terminal", "timeout", default=180))
     except (TypeError, ValueError):

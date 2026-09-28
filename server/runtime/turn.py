@@ -912,13 +912,20 @@ def _run_chat_turn_inner(
                 {"run_id": ctx.run_id, "session_id": ctx.session_id, "agent_id": str(instance_id or ctx.template_id)},
                 active_goal_condition=str((goal_controller.goal or {}).get("condition") or ""),
             )
+            auto_goal = should_activate_goal(task_intent_result)
+            # A semantic durable label without sufficient evidence is not an
+            # execution authorization for the Goal/task-board workflow.
+            if task_intent_result.intent == "durable_goal" and not auto_goal:
+                task_intent_result.intent = "one_shot_action"
+                task_intent_result.reason += "; durable activation evidence insufficient"
+                task_intent_result.durable_signals = []
             # Active Goal: keep independent one-shots from mutating Goal state.
             if goal_controller.active and task_intent_result.intent != "durable_goal":
                 task_intent_result.goal_relationship = "independent"
                 goal_controller.auto_activate_tools = False
             elif (
                 not goal_controller.active
-                and should_activate_goal(task_intent_result)
+                and auto_goal
             ):
                 goal_controller.activate(user_message, source="auto_classifier")
             run_scope = build_scope_for_intent(

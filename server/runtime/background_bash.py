@@ -105,10 +105,9 @@ def _snapshot(job: _Job) -> dict:
 def start(ctx, command: str) -> dict:
     if not isinstance(command, str) or not command.strip():
         raise ValueError("A nonempty shell command is required")
-    # Read authorization in the original tool invocation, before creating threads.
-    if (files.bash_needs_permission(command) and files._monitor_dangerous_bash.get()
-            and not files._allow_dangerous_bash.get()):
-        raise PermissionError("bash blocked: dangerous command pattern (denied by policy or awaiting permission)")
+    # Consume the unified permit before creating a background process.  This is
+    # deliberately stronger than the legacy dangerous-command regex.
+    files.consume_bash_execution(command, ctx.cwd)
     if not ctx.scope_key or not ctx.template_id:
         raise PermissionError("Background shell requires an assistant and task scope")
     timeout_s = _terminal_timeout()

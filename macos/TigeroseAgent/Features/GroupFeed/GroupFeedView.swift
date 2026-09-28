@@ -644,6 +644,8 @@ struct GroupFeedView: View {
                 try await app.api.resolvePermission(requestId: request.request_id, approved: true, mode: "once")
             case .allowAlways:
                 try await app.api.resolvePermission(requestId: request.request_id, approved: true, mode: "always")
+            case .allowTaskCapability:
+                try await app.api.resolvePermission(requestId: request.request_id, approved: true, mode: "task_capability")
             }
             if pendingPermission?.request_id == request.request_id {
                 pendingPermission = nil

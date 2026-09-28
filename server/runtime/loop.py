@@ -726,24 +726,11 @@ def _run_tool_loop_inner(
             }
         )
 
-        # Authorize a response's unknown/write shell plan as a group. The
-        # response is already recorded above, so the card can show exactly
-        # what the model proposed before any command is dispatched.
-        from server.runtime.command_plan import (
-            classify_bash_command,
-            grant_task_group,
-            has_task_grant,
-        )
-        from server.runtime import permissions as plan_permissions
-        from server.runtime.mesh_runtime import _current_work
+        # Freeze every Bash call before evaluating it independently. Each
+        # approval applies only to that command plan or an exact capability grant.
+        from server.runtime.command_plan import classify_bash_command
 
         command_plans: dict[str, Any] = {}
-        batch_allowed_calls: set[str] = set()
-        batch_denied_calls: set[str] = set()
-        batch_groups: dict[str, list[tuple[str, Any]]] = {
-            "unknown": [],
-            "mutation": [],
-        }
         for planned_call in tool_calls:
             if planned_call.function.name != "bash":
                 continue
@@ -762,48 +749,6 @@ def _run_tool_loop_inner(
                 continue
             plan = classify_bash_command(str(planned_args.get("command") or ""))
             command_plans[planned_call.id] = plan
-            if (
-                command_authorization is not None
-                # Durable task approvals must freeze actual tool arguments.
-                # Numbered batch display text is not an executable command.
-                and _current_work.get() is None
-                and
-                plan.risk in batch_groups
-                and not has_task_grant(command_authorization or {}, plan.grant_group)
-            ):
-                batch_groups[plan.risk].append((planned_call.id, plan))
-
-        for risk, planned_items in batch_groups.items():
-            if not planned_items:
-                continue
-            label = "未知命令" if risk == "unknown" else "工作区写入命令"
-            commands = "\n".join(
-                f"{index}. {plan.command}"
-                for index, (_call_id, plan) in enumerate(planned_items, start=1)
-            )
-            decision = {"approved": False, "mode": "once"}
-            if permission_channel:
-                decision = plan_permissions.request_and_wait(
-                    channel=permission_channel,
-                    tool="bash",
-                    args={"command": commands},
-                    reason=f"scope_bash_{risk}",
-                    detail=(
-                        f"本次计划包含 {len(planned_items)} 条{label}。"
-                        "以下命令将按列表顺序执行：\n" + commands
-                    ),
-                    domain=planned_items[0][1].grant_group,
-                    approval_choices="once,always",
-                )
-            if decision.get("mesh_pending"):
-                termination = "mesh_yield"
-                return _loop_return(reply="")
-            if bool(decision.get("approved")):
-                batch_allowed_calls.update(call_id for call_id, _plan in planned_items)
-                if str(decision.get("mode") or "once") == "always":
-                    grant_task_group(command_authorization or {}, planned_items[0][1].grant_group)
-            else:
-                batch_denied_calls.update(call_id for call_id, _plan in planned_items)
 
         for tc in tool_calls:
             if cancel_check:
@@ -868,11 +813,28 @@ def _run_tool_loop_inner(
             ).hexdigest()
             result: ToolResult | None = None
             live_process_query = name in {"bash_status", "bash_wait"}
-            gate: dict[str, str] | None = None
+            gate: dict[str, Any] | None = None
             tool_kind, tool_sem = _resolve_tool_semantics(
                 name, args if isinstance(args, dict) else {}
             )
             command_plan = command_plans.get(tc.id)
+            bash_evaluation = None
+            if name == "bash" and command_plan is not None:
+                from server.runtime.command_plan import evaluate_bash_with_layers
+                from server.runtime.bash_semantic import decide_bash_semantics
+
+                def _semantic_decider(state: dict[str, Any]):
+                    return decide_bash_semantics(client, model, state)
+
+                bash_evaluation = evaluate_bash_with_layers(
+                    command_plan,
+                    authorization=command_authorization,
+                    danger_policy=str(getattr(policy, "danger_policy", "ask")),
+                    workspace=executor.cwd,
+                    file_access=str(getattr(policy, "file_access", "ask")),
+                    usage_context=usage_context,
+                    semantic_decider=_semantic_decider,
+                )
             budget_rid: str | None = None
             tool_executed = False
             if hook_denial_reason:
@@ -880,17 +842,6 @@ def _run_tool_loop_inner(
                     hook_denial_reason,
                     "denied",
                     {"tool_call_id": tc.id, "tool_name": name, "tool_kind": tool_kind, "hook_denied": True},
-                )
-            elif tc.id in batch_denied_calls:
-                result = ToolResult(
-                    "Permission denied by user for this command plan. Do not retry it without a new plan.",
-                    "denied",
-                    {
-                        "tool_call_id": tc.id,
-                        "tool_name": name,
-                        "tool_kind": tool_kind,
-                        "permission_denied": True,
-                    },
                 )
             elif call_key in readonly_cache:
                 cached = readonly_cache[call_key]
@@ -1006,11 +957,8 @@ def _run_tool_loop_inner(
                 # authorization context or a UI channel. Preserve their
                 # durable-goal bash behavior while the app path uses the new
                 # command-plan policy unconditionally.
-                if (
-                    command_authorization is None
-                    and name == "bash"
-                    and bool(getattr(run_scope, "allow_bash", False))
-                ):
+                if name == "bash":
+                    # Bash scope is derived from the frozen v2 plan below.
                     scope_gate = None
                 else:
                     scope_gate = classify_scope(
@@ -1028,18 +976,6 @@ def _run_tool_loop_inner(
                         client=client, model=model, usage_context=usage_context,
                     ):
                         scope_gate = None
-                if (
-                    scope_gate
-                    and scope_gate.get("action") == "ask"
-                    and (
-                        tc.id in batch_allowed_calls
-                        or has_task_grant(
-                            command_authorization or {},
-                            str(scope_gate.get("domain") or ""),
-                        )
-                    )
-                ):
-                    scope_gate = None
                 if scope_gate and scope_gate.get("action") == "deny":
                     result = ToolResult(
                         str(scope_gate.get("detail") or "scope denied"),
@@ -1187,19 +1123,27 @@ def _run_tool_loop_inner(
                     ledger.mark_dispatching(attempt_id)
                     session_state.context["execution_ledger"] = ledger.to_context()
                 tool_executed = True
-                if name == "bash" and command_plan is not None and command_plan.can_run_without_shell:
-                    return file_tools.run_verified_readonly_commands(
-                        executor.cwd,
-                        command_plan.argv_groups,
+                permit_token = None
+                if name == "bash" and command_plan is not None:
+                    permit_token = file_tools.allow_bash_execution(command_plan.command, executor.cwd)
+                try:
+                    if name == "bash" and command_plan is not None and command_plan.can_run_without_shell:
+                        return file_tools.run_verified_readonly_commands(
+                            executor.cwd, command_plan.argv_groups, command=command_plan.command,
+                        )
+                    return executor.execute(
+                        name,
+                        args,
+                        tool_call_id=tc.id,
+                        scope_key=getattr(goal_controller, "board_scope", ""),
                     )
-                return executor.execute(
-                    name,
-                    args,
-                    tool_call_id=tc.id,
-                    scope_key=getattr(goal_controller, "board_scope", ""),
-                )
+                finally:
+                    if permit_token is not None:
+                        file_tools.reset_bash_execution(permit_token)
 
-            if result is None:
+            if result is None and name == "bash" and bash_evaluation is not None:
+                gate = bash_evaluation.to_gate()
+            elif result is None:
                 gate = perm.combine_gates(
                     gate,
                     perm.classify_permission(
@@ -1261,6 +1205,11 @@ def _run_tool_loop_inner(
                             detail=gate["detail"],
                             domain=str(gate.get("domain") or ""),
                             approval_choices=str(gate.get("approval_choices") or ""),
+                            metadata={
+                                key: gate[key]
+                                for key in ("plan_digest", "risk_level", "reason_codes", "command_segments")
+                                if key in gate
+                            },
                         )
                     if decision.get("mesh_pending"):
                         termination = "mesh_yield"
@@ -1296,6 +1245,15 @@ def _run_tool_loop_inner(
                                 # Bash ask historically expands for the run.
                                 if grant_mode == "always":
                                     run_scope.allow_bash = True
+                            if (
+                                name == "bash"
+                                and bash_evaluation is not None
+                                and bash_evaluation.grant_eligible
+                                and grant_mode in {"always", "task_capability"}
+                            ):
+                                from server.runtime.command_plan import grant_capabilities
+
+                                grant_capabilities(command_authorization or {}, command_plan)
                             if (
                                 grant_mode == "always"
                                 and run_scope is not None

@@ -61,10 +61,13 @@ def should_activate_goal(result: TaskIntentResult) -> bool:
         threshold = float(threshold)
     except (TypeError, ValueError):
         threshold = _GOAL_ACTIVATION_MIN_CONFIDENCE
+    # A configuration value may raise the activation floor, but never lower it.
+    # A short bounded request must not absorb unrelated task-board work.
+    threshold = max(_GOAL_ACTIVATION_MIN_CONFIDENCE, threshold)
     return (
         result.intent == "durable_goal"
         and result.confidence >= threshold
-        and bool(result.durable_signals)
+        and len(result.durable_signals) >= 2
         and result.authoritative
     )
 

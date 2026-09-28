@@ -9,12 +9,13 @@ struct PermissionRequest: Codable, Identifiable, Hashable {
     var timeout_s: Int?
     var domain: String?
     var approval_choices: [String]?
+    var metadata: [String: JSONValue]?
 
     var id: String { request_id }
 
     var offersCapabilityGrant: Bool {
         if let choices = approval_choices, !choices.isEmpty {
-            return choices.contains("once") && choices.contains("always")
+            return choices.contains("once") && (choices.contains("always") || choices.contains("task_capability"))
         }
         switch reason {
         case "scope_capability_domain",
@@ -140,6 +141,7 @@ enum PermissionDecision {
     case deny
     case allowOnce
     case allowAlways
+    case allowTaskCapability
 }
 
 /// Docked strip above the composer for HITL tool permission.
@@ -241,9 +243,9 @@ struct PermissionBanner: View {
                     Button {
                         guard !busy else { return }
                         busy = true
-                        onDecide(.allowAlways)
+                        onDecide(request.approval_choices?.contains("task_capability") == true ? .allowTaskCapability : .allowAlways)
                     } label: {
-                        Text(request.reason.hasPrefix("scope_bash_") ? "本任务允许" : "本轮允许")
+                        Text(request.approval_choices?.contains("task_capability") == true ? "本任务允许此能力" : (request.reason.hasPrefix("scope_bash_") ? "本任务允许" : "本轮允许"))
                             .font(TigeroseTheme.bodySm.weight(.semibold))
                             .foregroundStyle(TigeroseTheme.onPrimary)
                             .padding(.horizontal, 16)

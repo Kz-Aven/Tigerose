@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from server.runtime.task_intent import (
+    TaskIntentResult,
     classify_task_intent_with_llm,
     heuristic_intent,
     should_activate_goal,
@@ -86,6 +87,15 @@ class TaskIntentSemanticTests(unittest.TestCase):
         self.assertFalse(result.classified)
         self.assertNotEqual(result.intent, "one_shot_action")
         self.assertIn("missing semantic", result.classification_error)
+
+    def test_one_durable_signal_cannot_auto_activate_a_goal(self):
+        result = TaskIntentResult(
+            intent="durable_goal",
+            confidence=0.99,
+            durable_signals=["存在可独立验证的多个工作项"],
+            authoritative=True,
+        )
+        self.assertFalse(should_activate_goal(result))
 
 
 if __name__ == "__main__":

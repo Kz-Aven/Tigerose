@@ -14,6 +14,7 @@ from server.runtime.goal import Evaluation
 from server.runtime.typesafe_judgments import (
     TypeSafeUnavailable,
     classify_task_intent_with_typesafe,
+    decide_bash_with_typesafe,
     evaluate_goal_with_typesafe,
 )
 
@@ -56,6 +57,24 @@ def factory(client):
 
 
 class TypeSafeJudgmentTests(unittest.TestCase):
+    def test_bash_choice_requires_complete_probability_contract(self):
+        answer = SimpleNamespace(
+            type="choice", choice="ask", confidence=0.92,
+            probabilities={"allow": 0.04, "ask": 0.92, "deny": 0.04},
+        )
+        client = FakeClient(SimpleNamespace(answers={"bash_action": answer}))
+        result = decide_bash_with_typesafe(
+            {"api_key": "must-not-leak", "effects": []}, client_factory=factory(client),
+        )
+        self.assertEqual(result.choice, "ask")
+        self.assertNotIn("must-not-leak", json.dumps(client.state))
+
+    def test_bash_choice_rejects_incomplete_probability_contract(self):
+        answer = SimpleNamespace(type="choice", choice="allow", confidence=0.99, probabilities={"allow": 1.0})
+        client = FakeClient(SimpleNamespace(answers={"bash_action": answer}))
+        with self.assertRaises(TypeSafeUnavailable):
+            decide_bash_with_typesafe({"effects": []}, client_factory=factory(client))
+
     def test_durable_intent_uses_valid_typesafe_result(self):
         client = FakeClient(
             response(

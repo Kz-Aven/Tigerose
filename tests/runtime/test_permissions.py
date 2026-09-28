@@ -141,6 +141,7 @@ class PermissionRecoveryTests(unittest.TestCase):
             "timeout_s": 120,
             "domain": "runtime.file",
             "approval_choices": ["once", "always"],
+            "metadata": {},
         })
 
     def test_resolving_recovered_request_unblocks_waiting_turn(self):
@@ -175,6 +176,15 @@ class PermissionRecoveryTests(unittest.TestCase):
         self.assertFalse(worker.is_alive())
         self.assertEqual(outcome, {"approved": True, "mode": "always", "domain": "runtime.file"})
         self.assertEqual(permissions.list_pending("assistant:tpl"), [])
+
+    def test_task_capability_mode_must_be_offered_by_the_pending_request(self):
+        pending = permissions.PendingPermission(
+            request_id="once_only", channel="assistant:tpl", tool="bash", reason="scope_bash",
+            detail="x", approval_choices=["once"],
+        )
+        with patch.object(permissions, "_pending", {pending.request_id: pending}):
+            response = permissions.resolve(pending.request_id, True, mode="task_capability")
+        self.assertEqual(response["mode"], "once")
 
     def test_scope_gate_passes_domain_and_choices_to_permission_request(self):
         tool_call = SimpleNamespace(

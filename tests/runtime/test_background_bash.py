@@ -17,6 +17,14 @@ def python_command(code):
     return shlex.quote(sys.executable) + " -c " + shlex.quote(code)
 
 
+def start_permitted(ctx, command):
+    token = files.allow_bash_execution(command, ctx.cwd)
+    try:
+        return jobs.start(ctx, command)
+    finally:
+        files.reset_bash_execution(token)
+
+
 class BackgroundBashTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -29,7 +37,7 @@ class BackgroundBashTests(unittest.TestCase):
 
     def test_start_returns_before_process_finishes_and_wait_collects_exit(self):
         started = time.monotonic()
-        result = jobs.start(self.ctx, python_command("import time; time.sleep(1.2); print('finished')"))
+        result = start_permitted(self.ctx, python_command("import time; time.sleep(1.2); print('finished')"))
         self.assertLess(time.monotonic() - started, 0.8)
         self.assertEqual(result["status"], "running")
         final = jobs.wait(self.ctx, result["job_id"], timeout_s=3)
@@ -38,7 +46,7 @@ class BackgroundBashTests(unittest.TestCase):
         self.assertIn("finished", final["output"])
 
     def test_large_output_cannot_block_on_an_unread_pipe(self):
-        result = jobs.start(self.ctx, python_command("import sys; sys.stdout.write('x' * 200000); sys.stderr.write('tail')"))
+        result = start_permitted(self.ctx, python_command("import sys; sys.stdout.write('x' * 200000); sys.stderr.write('tail')"))
         final = jobs.wait(self.ctx, result["job_id"], timeout_s=3)
         self.assertEqual(final["status"], "completed")
         self.assertTrue(final["output_truncated"])
@@ -46,7 +54,7 @@ class BackgroundBashTests(unittest.TestCase):
         self.assertTrue(final["output"].endswith("tail"))
 
     def test_other_assistant_or_scope_cannot_read_wait_or_cancel(self):
-        result = jobs.start(self.ctx, python_command("import time; time.sleep(10)"))
+        result = start_permitted(self.ctx, python_command("import time; time.sleep(10)"))
         impostors = [SimpleNamespace(scope_key=self.ctx.scope_key, template_id="B"),
                      SimpleNamespace(scope_key="mesh:other:A", template_id="A")]
         for impostor in impostors:
@@ -56,7 +64,7 @@ class BackgroundBashTests(unittest.TestCase):
         self.assertEqual(jobs.status(self.ctx, result["job_id"])["status"], "running")
 
     def test_cancel_stops_the_process_and_is_idempotent(self):
-        result = jobs.start(self.ctx, python_command("import time; time.sleep(10)"))
+        result = start_permitted(self.ctx, python_command("import time; time.sleep(10)"))
         final = jobs.cancel(self.ctx, result["job_id"])
         self.assertEqual(final["status"], "cancelled")
         self.assertIsNotNone(final["exit_code"])
@@ -64,7 +72,7 @@ class BackgroundBashTests(unittest.TestCase):
 
     def test_timeout_terminates_without_polling(self):
         with patch.object(jobs, "_terminal_timeout", return_value=0.15):
-            result = jobs.start(self.ctx, python_command("import time; time.sleep(10)"))
+            result = start_permitted(self.ctx, python_command("import time; time.sleep(10)"))
         final = jobs.wait(self.ctx, result["job_id"], timeout_s=3)
         self.assertEqual(final["status"], "timeout")
         self.assertIsNotNone(final["exit_code"])
@@ -75,17 +83,24 @@ class BackgroundBashTests(unittest.TestCase):
             with self.assertRaises(PermissionError):
                 jobs.start(self.ctx, command)
             start_process.assert_not_called()
-        token = files.allow_dangerous_bash(True)
-        try:
-            result = jobs.start(self.ctx, command)
-        finally:
-            files.reset_allow_dangerous_bash(token)
+        result = start_permitted(self.ctx, command)
         final = jobs.wait(self.ctx, result["job_id"], timeout_s=3)
         self.assertEqual(final["status"], "completed")
         self.assertEqual(final["output"], "sudo is only test text")
 
+    def test_execution_permit_is_single_use(self):
+        command = python_command("print('once')")
+        token = files.allow_bash_execution(command, self.ctx.cwd)
+        try:
+            first = jobs.start(self.ctx, command)
+            with self.assertRaises(PermissionError):
+                jobs.start(self.ctx, command)
+        finally:
+            files.reset_bash_execution(token)
+        self.assertEqual(jobs.wait(self.ctx, first["job_id"], timeout_s=3)["status"], "completed")
+
     def test_cleanup_stops_jobs_and_removes_output_files(self):
-        result = jobs.start(self.ctx, python_command("import time; time.sleep(10)"))
+        result = start_permitted(self.ctx, python_command("import time; time.sleep(10)"))
         job = jobs._jobs[result["job_id"]]
         self.assertTrue(job.output_path.exists())
         jobs.cleanup_scope(self.ctx.scope_key, self.ctx.template_id)

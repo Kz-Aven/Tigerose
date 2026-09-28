@@ -223,6 +223,13 @@ def classify_scope(
 
     from server.runtime.tools.mesh import MESH_TOOL_SPECS
 
+    if name == "create_task" and scope.intent != "durable_goal":
+        return {
+            "action": ACTION_DENY,
+            "reason": "scope_task_board",
+            "detail": "当前是单次任务，不能创建任务板条目。请直接完成用户请求。",
+        }
+
     if name in INTERNAL_TOOLS or name in MESH_TOOL_SPECS:
         return None
 
@@ -258,33 +265,9 @@ def classify_scope(
     if name == "bash":
         if _is_connector_cli_command(str(payload.get("command") or ""), scope.connector_executables):
             return None
-        from server.runtime.command_plan import classify_bash_command
+        from server.runtime.command_plan import classify_bash_command, evaluate_bash
 
-        plan = classify_bash_command(str(payload.get("command") or ""))
-        if plan.risk == "verified_read":
-            return None
-        if plan.risk == "high_risk":
-            return {
-                "action": ACTION_ASK,
-                "reason": "scope_bash_high_risk",
-                "detail": "高风险终端命令必须逐项确认，不能复用此前的授权。",
-                "domain": "runtime.bash.high_risk",
-            }
-        if plan.risk == "mutation":
-            return {
-                "action": ACTION_ASK,
-                "reason": "scope_bash_mutation",
-                "detail": "命令计划包含工作区写入操作。可确认本次计划，或授权当前任务内同类写入。",
-                "domain": plan.grant_group,
-                "approval_choices": "once,always",
-            }
-        return {
-            "action": ACTION_ASK,
-            "reason": "scope_bash_unknown",
-            "detail": "系统无法证明该命令只读且只访问当前工作区。请确认后执行。",
-            "domain": plan.grant_group,
-            "approval_choices": "once,always",
-        }
+        return evaluate_bash(classify_bash_command(str(payload.get("command") or ""))).to_gate()
 
     if name in {"edit_file", "write_file", "excel_write"}:
         from server.runtime.tools.files import is_under_roots

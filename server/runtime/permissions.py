@@ -44,12 +44,13 @@ class PendingPermission:
     detail: str
     event: threading.Event = field(default_factory=threading.Event)
     approved: bool | None = None
-    # once | always — meaningful when approved is True
+    # once | always | task_capability — meaningful when approved is True
     mode: str = "once"
     domain: str = ""
     args_preview: dict[str, Any] = field(default_factory=dict)
     timeout_s: float = _TIMEOUT_S
     approval_choices: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=time.time)
 
 
@@ -128,27 +129,42 @@ def _classify_permission(
 
         if _is_connector_cli_command(command, list(connector_executables)):
             return None
-
     # Axis B first — dangerous ops
     if name == "bash" and pol.monitors_dangerous_bash():
         command = str(args.get("command") or "")
-        if file_tools.bash_needs_permission(command):
-            detail = (
-                "助理请求执行可能危险的 shell 命令：\n"
-                f"```\n{command.strip()[:800]}\n```"
-            )
-            if pol.danger_policy == DANGER_DENY:
-                return {
-                    "action": ACTION_DENY,
-                    "reason": "dangerous_bash",
-                    "detail": detail + "\n\n该命令未执行：当前助理的安全策略禁止高风险终端操作。",
-                }
-            # ask
-            return {
-                "action": ACTION_ASK,
-                "reason": "dangerous_bash",
-                "detail": detail,
-            }
+        skill_script_index = file_tools.skill_script_argument_index(
+            command, cwd=cwd_r, skill_roots=skill_roots,
+        )
+        external = [
+            path for path in file_tools.bash_absolute_paths(
+                command, skip_argument_index=skill_script_index, cwd=cwd_r,
+            ) if not file_tools.is_trusted_path(cwd_r, path, trusted_roots)
+        ]
+        from server.runtime.command_plan import classify_bash_command, evaluate_bash
+
+        bash_gate = evaluate_bash(
+            classify_bash_command(command), danger_policy=pol.danger_policy,
+            workspace=cwd_r, file_access=pol.file_access,
+        ).to_gate()
+        if bash_gate and bash_gate.get("action") == ACTION_DENY:
+            if str(bash_gate.get("risk_level") or "") in {"R3", "R4"}:
+                bash_gate = {**bash_gate, "reason": "dangerous_bash"}
+            return bash_gate
+        if external:
+            detail = "Bash 计划访问工作区外路径：\n" + "\n".join(f"- `{path}`" for path in external[:10])
+            if pol.file_access == FILE_ACCESS_WORKSPACE:
+                return {"action": ACTION_DENY, "reason": "external_path", "detail": detail}
+            if pol.file_access == FILE_ACCESS_ASK:
+                return {"action": ACTION_ASK, "reason": "external_path", "detail": detail}
+        if skill_script_index is not None:
+            # Exactly one enabled skill entry point, with no other external
+            # shell arguments, retains the existing skill-resource exemption.
+            return None
+        if bash_gate:
+            # The path-policy gate below can only make this stricter. Returning
+            # an ask here preserves the fail-closed behavior for direct users
+            # of classify_permission as well as the loop's unified evaluator.
+            return bash_gate
 
     if name == "request_clear_session":
         # Always ask — never auto-allow.
@@ -294,6 +310,7 @@ def request_and_wait(
     timeout_s: float = _TIMEOUT_S,
     domain: str = "",
     approval_choices: str = "",
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Publish permission_request over SSE and block until resolve/timeout.
 
@@ -320,6 +337,7 @@ def request_and_wait(
         args_preview=_preview_args(args),
         timeout_s=timeout_s,
         approval_choices=choices,
+        metadata=dict(metadata or {}),
     )
     with _lock:
         _pending[request_id] = pending
@@ -340,7 +358,7 @@ def request_and_wait(
     if pending.event.wait(timeout=timeout_s):
         approved = bool(pending.approved)
         mode = str(pending.mode or "once")
-        if mode not in {"once", "always"}:
+        if mode not in {"once", "always", "task_capability"}:
             mode = "once"
     else:
         log.info("permission %s timed out on %s", request_id, channel)
@@ -374,7 +392,8 @@ def resolve(
     pending.approved = bool(approved)
     if approved:
         chosen = str(mode or "once").strip().lower()
-        pending.mode = chosen if chosen in {"once", "always"} else "once"
+        allowed = set(pending.approval_choices or ["once"])
+        pending.mode = chosen if chosen in allowed and chosen in {"once", "always", "task_capability"} else "once"
     else:
         pending.mode = "once"
     pending.event.set()
@@ -432,6 +451,7 @@ def _pending_payload(
         "timeout_s": int(pending.timeout_s),
         "domain": pending.domain,
         "approval_choices": pending.approval_choices,
+        "metadata": pending.metadata,
         "age_s": int(time.time() - pending.created_at),
     }
     if include_channel:

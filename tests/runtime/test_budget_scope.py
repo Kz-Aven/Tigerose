@@ -74,14 +74,13 @@ class BudgetScopeTests(unittest.TestCase):
         assert gate is not None
         self.assertEqual(gate["action"], "deny")
 
-    def test_task_board_and_new_empty_file_do_not_require_scope_permission(self):
+    def test_one_shot_scope_denies_new_task_and_allows_new_empty_file(self):
         scope = build_scope_for_intent("one_shot_action")
-        self.assertIsNone(
-            classify_scope(scope, "create_task", {"subject": "Investigate"}, cwd=".")
-        )
-        self.assertIsNone(
-            classify_scope(scope, "claim_task", {"task_id": "task_1"}, cwd=".")
-        )
+        gate = classify_scope(scope, "create_task", {"subject": "Investigate"}, cwd=".")
+        self.assertIsNotNone(gate)
+        assert gate is not None
+        self.assertEqual(gate["action"], "deny")
+        self.assertEqual(gate["reason"], "scope_task_board")
 
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "server" / "runtime" / "blank.py"
